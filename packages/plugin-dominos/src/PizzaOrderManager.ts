@@ -726,4 +726,97 @@ export class PizzaOrderManager implements OrderManager {
             };
         }
     }
+
+    getOrderSummary(order: Order, customer: Customer): string {
+        let summary = "Order Summary:\n";
+
+        // Add customer info if available
+        if (customer.name) {
+            summary += `Customer: ${customer.name}\n`;
+        }
+        if (customer.address) {
+            summary += `Delivery Address: ${customer.address}\n`;
+        }
+
+        // Add items
+        if (order.items && order.items.length > 0) {
+            summary += "\nPizza(s):\n";
+            order.items.forEach((item, index) => {
+                summary += `${index + 1}. ${item.size} ${item.crust} Crust Pizza\n`;
+                if (item.toppings && item.toppings.length > 0) {
+                    summary += "   Toppings:\n";
+                    item.toppings.forEach(topping => {
+                        const portion = topping.portion === 'ALL' ? 'Whole Pizza' : `${topping.portion} Half`;
+                        const amount = topping.amount > 1 ? 'Extra ' : '';
+                        summary += `   - ${amount}${this.menuConfig.availableToppings[topping.code]} (${portion})\n`;
+                    });
+                }
+                if (item.specialInstructions) {
+                    summary += `   Special Instructions: ${item.specialInstructions}\n`;
+                }
+                summary += `   Quantity: ${item.quantity}\n`;
+            });
+        }
+
+        // Add price if available
+        if (order.total) {
+            summary += `\nTotal: ${this.formatCurrency(order.total)}\n`;
+        }
+
+        return summary;
+    }
+
+    getNextRequiredActionDialogue(order: Order, customer: Customer): string {
+        // Check customer information
+        if (!customer.name || !customer.phone || !customer.email || !customer.address) {
+            return "To continue with your order, I'll need your delivery information. " +
+                   "Please provide your name, phone number, email, and delivery address.";
+        }
+
+        // Check if order has items
+        if (!order.items || order.items.length === 0) {
+            return "What kind of pizza would you like to order? " +
+                   "You can choose the size (Small, Medium, Large, XLarge) and crust type " +
+                   "(Hand Tossed, Thin, Pan, Brooklyn, or Gluten Free).";
+        }
+
+        // Check payment information
+        if (!order.paymentMethod || !order.progress.hasValidPayment) {
+            return "To complete your order, I'll need your payment information. " +
+                   "Please provide your credit card details (number, expiration date, CVV, and postal code).";
+        }
+
+        // Ready for confirmation
+        if (!order.progress.isConfirmed) {
+            return "Your order is ready! Would you like to confirm and place this order?";
+        }
+
+        // Order is confirmed
+        return "Your order has been confirmed and is being prepared. " +
+               "You can track your order status using your phone number.";
+    }
+
+    getNextRequiredAction(order: Order, customer: Customer): string {
+        // Check customer information
+        if (!customer.name || !customer.phone || !customer.email || !customer.address) {
+            return "PROVIDE_CUSTOMER_INFO";
+        }
+
+        // Check if order has items
+        if (!order.items || order.items.length === 0) {
+            return "ADD_ITEMS";
+        }
+
+        // Check payment information
+        if (!order.paymentMethod || !order.progress.hasValidPayment) {
+            return "PROVIDE_PAYMENT";
+        }
+
+        // Ready for confirmation
+        if (!order.progress.isConfirmed) {
+            return "CONFIRM_ORDER";
+        }
+
+        return "ORDER_COMPLETE";
+    }
 }
