@@ -19,17 +19,14 @@ export const pizzaOrderProvider: Provider = {
         if (order.paymentStatus === PaymentStatus.NOT_PROVIDED) {
             context += "Payment information needed to complete order.\n";
         } else if (order.paymentStatus === PaymentStatus.INVALID) {
-            context +=
-                "Previous payment method was invalid. Please provide new payment information.\n";
+            context += "Previous payment method was invalid. Please provide new payment information.\n";
         }
 
         // Add clearer next action guidance
         if (order.status === OrderStatus.AWAITING_PAYMENT) {
-            context +=
-                "\nREQUIRED: Please provide credit card information to complete your order.\n";
+            context += "\nREQUIRED: Please provide credit card information to complete your order.\n";
         } else if (order.status === OrderStatus.PROCESSING) {
-            context +=
-                "\nREQUIRED: Please review your order and confirm to place it.\n";
+            context += "\nREQUIRED: Please review your order and confirm to place it.\n";
         }
 
         context += "=== PIZZA ORDER STATUS ===\n\n";
@@ -41,23 +38,6 @@ export const pizzaOrderProvider: Provider = {
         context += "\nNEXT REQUIRED ACTION:\n";
         context += orderManager.getNextRequiredAction(order, customer);
 
-        // Add store status
-        context += "\n\nSTORE STATUS:\n";
-        context += `Store Open: ${orderManager.availability.isStoreOpen ? "Yes" : "No"}\n`;
-        context += `Delivery Available: ${orderManager.availability.isDeliveryAvailable ? "Yes" : "No"}\n`;
-        context += `Carryout Available: ${orderManager.availability.isCarryoutAvailable ? "Yes" : "No"}\n`;
-
-        // Add order status
-        context += "\nORDER STATUS:\n";
-        context += `Current Status: ${order.status}\n`;
-        if (order.status === OrderStatus.CONFIRMED) {
-            context += "Order is confirmed and being prepared.\n";
-        } else if (order.status === OrderStatus.PROCESSING) {
-            context += "Order is being processed but needs confirmation.\n";
-        }
-
-        console.log("Order context:\n", context);
-
         return context;
-    },
+    }
 };

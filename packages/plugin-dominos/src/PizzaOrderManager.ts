@@ -19,6 +19,10 @@ import {
     DominosAddress,
     DominosProduct
 } from "./types";
+import { RateLimiter } from "./utils/RateLimiter";
+import { urls } from 'dominos';
+import { useInternational, canada, usa } from 'dominos/utils/urls.js';
+import { NearbyStores } from 'dominos';
 
 export class PizzaOrderManager implements OrderManager {
     storeId: string = "";
@@ -167,8 +171,8 @@ export class PizzaOrderManager implements OrderManager {
     };
 
     // API Configuration
-    private readonly BASE_URL: string;
-    private readonly TRACKER_URL: string;
+    private readonly BASE_URL = urls.order;
+    private readonly TRACKER_URL = urls.tracker;
 
     private readonly headers = {
         'Accept': 'application/json',
@@ -183,9 +187,14 @@ export class PizzaOrderManager implements OrderManager {
         'Content-Type': 'application/json; charset=utf-8'
     };
 
+    private static rateLimiter = new RateLimiter({
+        maxRequests: 10,  // Maximum requests per window
+        timeWindow: 60000 // Time window in milliseconds (1 minute)
+    });
+
     constructor(private runtime: IAgentRuntime) {
-        this.BASE_URL = this.runtime.getSetting('API_BASE_URL') || 'https://order.dominos.com/power';
-        this.TRACKER_URL = this.runtime.getSetting('API_TRACKER_URL') || 'https://tracker.dominos.com/tracker-presentation-service/v2';
+        // Default to USA urls, can be changed if needed
+        useInternational(usa);
     }
 
     // Helper Methods
@@ -620,6 +629,15 @@ export class PizzaOrderManager implements OrderManager {
 
     async processOrder(order: Order, customer: Customer): Promise<Order | OrderError> {
         try {
+            // Check rate limit before processing
+            if (!await PizzaOrderManager.rateLimiter.tryAcquire()) {
+                return {
+                    type: ErrorType.VALIDATION_FAILED,
+                    message: "Too many orders. Please try again in a few minutes.",
+                    code: "RATE_LIMIT_EXCEEDED"
+                };
+            }
+
             // Validate customer information
             const customerError = this.validateCustomerInfo(customer);
             if (customerError) return customerError;
@@ -818,5 +836,50 @@ export class PizzaOrderManager implements OrderManager {
         }
 
         return "ORDER_COMPLETE";
+    }
+
+    async validateStoreAvailability(address: string): Promise<{
+        isAvailable: boolean;
+        message?: string;
+        storeId?: string;
+    }> {
+        try {
+            const nearbyStores = await new NearbyStores(address);
+
+            let closestStore = null;
+            let minDistance = Number.MAX_VALUE;
+
+            for (const store of nearbyStores.stores) {
+                if (
+                    store.IsOnlineCapable &&
+                    store.IsDeliveryStore &&
+                    store.IsOpen &&
+                    store.ServiceIsOpen.Delivery &&
+                    store.MinDistance < minDistance
+                ) {
+                    minDistance = store.MinDistance;
+                    closestStore = store;
+                }
+            }
+
+            if (!closestStore) {
+                return {
+                    isAvailable: false,
+                    message: "No stores are currently available for delivery to your location."
+                };
+            }
+
+            return {
+                isAvailable: true,
+                storeId: closestStore.StoreID,
+                message: `Found available store ${closestStore.StoreID} (${minDistance.toFixed(1)} miles away)`
+            };
+        } catch (error) {
+            console.error("Store availability check failed:", error);
+            return {
+                isAvailable: false,
+                message: "Unable to check store availability. Please try again later."
+            };
+        }
     }
 }
