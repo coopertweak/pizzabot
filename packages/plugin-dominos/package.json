@@ -5,7 +5,7 @@
     "type": "module",
     "types": "dist/index.d.ts",
     "dependencies": {
-        "@ai16z/eliza": "workspace:*",
+        "eliza": "workspace:*",
         "dominos": "^3.3.1",
         "tsup": "8.3.5"
     },
