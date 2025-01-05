@@ -2,7 +2,7 @@ import {
     composeContext,
     Content,
     elizaLogger,
-    generateObjectDEPRECATED,
+    generateObjectArray,
     ModelClass,
     type Action,
     type ActionExample,
@@ -10,7 +10,7 @@ import {
     type IAgentRuntime,
     type Memory,
     type State,
-} from "@ai16z/eliza";
+} from "@elizaos/core";
 import Exception from "../types/exception";
 import { getFlowConnectorInstance } from "../providers/connector.provider";
 import {
@@ -87,11 +87,16 @@ export class TransferAction {
         });
 
         // Generate transfer content
-        const content = await generateObjectDEPRECATED({
+        const recommendations = await generateObjectArray({
             runtime,
             context: transferContext,
-            modelClass: ModelClass.SMALL,
+            modelClass: ModelClass.MEDIUM,
         });
+
+        elizaLogger.debug("Recommendations", recommendations);
+
+        // Convert array to object
+        const content = recommendations[recommendations.length - 1];
 
         // Validate transfer content
         if (!isTransferContent(runtime, content)) {
