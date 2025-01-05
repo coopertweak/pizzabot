@@ -1,6 +1,6 @@
 import { Action, IAgentRuntime, Memory } from "@ai16z/eliza";
 import { PizzaOrderManager } from "../PizzaOrderManager";
-import { OrderStatus } from "../types";
+import { OrderStatus, Order } from "../types";
 
 export const confirmOrder: Action = {
     name: "CONFIRM_ORDER",

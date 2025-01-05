@@ -1,3 +1,5 @@
+import { Payment } from 'dominos';
+
 // Order status enums
 export enum OrderStatus {
     NEW = "NEW",
@@ -104,13 +106,27 @@ export interface OrderProgress {
 
 // Order interface
 export interface Order {
+    validate(): Promise<void>;
+    price(): Promise<void>;
+    place(): Promise<void>;
+    orderID: string;
+    estimatedWaitMinutes: number;
     status: OrderStatus;
-    paymentStatus: PaymentStatus;
-    paymentMethod?: PaymentMethod;
-    customer?: Customer;
+    progress: {
+        hasCustomerInfo: boolean;
+        hasValidPayment: boolean;
+        isConfirmed: boolean;
+    };
+    amountsBreakdown: {
+        customer: number;
+        // Add other amount breakdown properties if needed
+    };
+    payments: Payment[];
     items?: OrderItem[];
-    progress: OrderProgress;
+    addItem(item: OrderItem): void;
+    paymentMethod?: PaymentMethod;
     total: number;
+    paymentStatus: PaymentStatus;
 }
 
 // Custom error interface
