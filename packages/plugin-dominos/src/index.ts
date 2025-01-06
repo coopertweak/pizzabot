@@ -1,14 +1,14 @@
-import { Plugin } from "@ai16z/eliza";
-import { startOrder } from "./actions/startOrder.ts";
-import { pizzaOrderProvider } from "./providers/pizzaOrder.ts";
-import { endOrder } from "./actions/endOrder.ts";
-import { updateCustomer } from "./actions/updateCustomer.ts";
-import { updateOrder } from "./actions/updateOrder.ts";
-import { confirmOrder } from "./actions/confirmOrder.ts";
-import { detectPizzaIntent } from "./actions/detectPizzaIntent.ts";
+import { Plugin } from "@elizaos/core";
+import { startOrder } from "./actions/startOrder";
+import { pizzaOrderProvider } from "./providers/pizzaOrder";
+import { endOrder } from "./actions/endOrder";
+import { updateCustomer } from "./actions/updateCustomer";
+import { updateOrder } from "./actions/updateOrder";
+import { confirmOrder } from "./actions/confirmOrder";
+import { detectPizzaIntent } from "./actions/detectPizzaIntent";
 
-export * as actions from "./actions/index.ts";
-export * as providers from "./providers/index.ts";
+export * as actions from "./actions";
+export * as providers from "./providers";
 
 export const dominosPlugin: Plugin = {
     name: "dominos",

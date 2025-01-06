@@ -5,7 +5,7 @@ import {
     IAgentRuntime,
     Memory,
     ModelClass,
-} from "@ai16z/eliza";
+} from "@elizaos/core";
 import { PizzaOrderManager } from "../PizzaOrderManager";
 
 const PIZZA_INTENT_PROMPT = `
