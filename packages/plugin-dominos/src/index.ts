@@ -7,12 +7,8 @@ import { updateOrder } from "./actions/updateOrder";
 import { confirmOrder } from "./actions/confirmOrder";
 import { detectPizzaIntent } from "./actions/detectPizzaIntent";
 
-// Export namespaces
-export * as actions from "./actions";
-export * as providers from "./providers";
-
-// Export plugin
-export const dominosPlugin: Plugin = {
+// Export plugin as default
+export default {
     name: "dominos",
     description: "Order a dominos pizza",
     actions: [
@@ -24,4 +20,4 @@ export const dominosPlugin: Plugin = {
         confirmOrder
     ],
     providers: [pizzaOrderProvider],
-};
+} as Plugin;
