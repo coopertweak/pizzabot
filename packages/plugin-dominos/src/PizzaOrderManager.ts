@@ -1,4 +1,4 @@
-import { IAgentRuntime } from "@elizaos/core";
+import { IAgentRuntime, elizaLogger } from "@elizaos/core";
 import {
     Customer,
     ErrorType,
@@ -23,6 +23,7 @@ import { RateLimiter } from "./utils/RateLimiter";
 import { urls } from 'dominos';
 import { useInternational, canada, usa } from 'dominos/utils/urls.js';
 import { NearbyStores } from 'dominos';
+import { Menu, Store } from 'dominos';
 
 export class PizzaOrderManager implements OrderManager {
     storeId: string = "";
@@ -192,8 +193,10 @@ export class PizzaOrderManager implements OrderManager {
         timeWindow: 60000 // Time window in milliseconds (1 minute)
     });
 
+    private menu: any = null;
+
     constructor(private runtime: IAgentRuntime) {
-        // Default to USA urls, can be changed if needed
+        elizaLogger.info("Initializing PizzaOrderManager");
         useInternational(usa);
     }
 
@@ -488,23 +491,50 @@ export class PizzaOrderManager implements OrderManager {
         return null;
     }
 
-    private calculatePizzaPrice(item: OrderItem): number {
-        let price = this.menuConfig.basePrices[item.size];
-        price += this.menuConfig.crustPrices[item.crust] || 0;
+    private async getMenu(): Promise<any> {
+        if (!this.menu) {
+            if (!this.storeId) {
+                elizaLogger.error("Failed to get menu - no store ID set");
+                throw new Error("Store ID must be set before getting menu");
+            }
+            elizaLogger.debug(`Fetching menu for store ${this.storeId}`);
+            this.menu = await new Menu(this.storeId);
+            elizaLogger.success(`Menu fetched successfully for store ${this.storeId}`);
+        }
+        return this.menu;
+    }
 
-        if (item.toppings) {
-            for (const topping of item.toppings) {
-                const toppingInfo = this.getToppingInfo(topping.code);
-                const portionMultiplier =
-                    topping.portion === ToppingPortion.ALL ? 1 : 0.5;
-                price += toppingInfo.price * topping.amount * portionMultiplier;
+    private async calculatePizzaPrice(item: OrderItem): Promise<number> {
+        try {
+            elizaLogger.debug(`Calculating price for order item:`, item);
+            const dominosProduct = this.convertItemToProduct(item);
+
+            const tempOrder = {
+                StoreID: this.storeId,
+                Products: [dominosProduct]
+            };
+
+            elizaLogger.debug("Requesting price from Dominos API");
+            const response = await fetch(`${this.BASE_URL}/price-order`, {
+                method: 'POST',
+                headers: this.headers,
+                body: JSON.stringify({ Order: tempOrder })
+            });
+
+            const priceData = await response.json();
+
+            if (priceData.Status !== 'Success') {
+                elizaLogger.error("Price calculation failed:", priceData.StatusItems.join(', '));
+                throw new Error(`Failed to get price: ${priceData.StatusItems.join(', ')}`);
             }
 
-            const comboDiscount = this.checkSpecialCombos(item.toppings);
-            price -= comboDiscount;
-        }
+            elizaLogger.success(`Price calculated: $${priceData.Order.Amounts.Customer}`);
+            return priceData.Order.Amounts.Customer;
 
-        return price * item.quantity;
+        } catch (error) {
+            elizaLogger.error("Error calculating pizza price:", error);
+            throw error;
+        }
     }
 
     private convertItemToProduct(item: OrderItem): DominosProduct {
@@ -628,6 +658,11 @@ export class PizzaOrderManager implements OrderManager {
     }
 
     async processOrder(order: Order, customer: Customer): Promise<Order | OrderError> {
+        elizaLogger.info("Processing new order:", {
+            customerName: customer.name,
+            items: order.items?.length
+        });
+
         try {
             // Check rate limit before processing
             if (!await PizzaOrderManager.rateLimiter.tryAcquire()) {
@@ -682,45 +717,58 @@ export class PizzaOrderManager implements OrderManager {
 
             // Get store ID if not already set
             if (!this.storeId) {
+                elizaLogger.debug("Finding nearest store for address:", customer.address);
                 this.storeId = await this.getNearestStoreId(customer.address);
+                elizaLogger.success(`Found nearest store: ${this.storeId}`);
             }
 
             // Convert to API format
             const orderRequest = this.convertToOrderRequest(order, customer);
 
             // Validate with API
+            elizaLogger.debug("Validating order with Dominos API");
             const validatedOrder = await this.validateOrderWithAPI(orderRequest);
             if (validatedOrder.Status !== 'Success') {
+                elizaLogger.error("Order validation failed:", validatedOrder.StatusItems);
                 return {
                     type: ErrorType.VALIDATION_FAILED,
                     message: validatedOrder.StatusItems.join(', '),
                     code: 'API_VALIDATION_FAILED'
                 };
             }
+            elizaLogger.success("Order validation successful");
 
             // Price the order
+            elizaLogger.debug("Getting final price from Dominos API");
             const pricedOrder = await this.priceOrderWithAPI(orderRequest);
             if (pricedOrder.Status !== 'Success') {
+                elizaLogger.error("Order pricing failed:", pricedOrder.StatusItems);
                 return {
                     type: ErrorType.VALIDATION_FAILED,
                     message: pricedOrder.StatusItems.join(', '),
                     code: 'API_PRICING_FAILED'
                 };
             }
+            elizaLogger.success(`Order priced successfully: $${pricedOrder.Order.Amounts.Customer}`);
 
             // Update total with API price
             order.total = pricedOrder.Order.Amounts.Customer;
 
             // If payment is provided and valid, attempt to place order
             if (order.paymentMethod) {
+                elizaLogger.debug("Validating payment method");
                 const paymentError = this.validatePaymentMethod(order.paymentMethod);
                 if (paymentError) {
+                    elizaLogger.error("Payment validation failed:", paymentError);
                     order.paymentStatus = PaymentStatus.INVALID;
                     return paymentError;
                 }
+                elizaLogger.success("Payment validation successful");
 
+                elizaLogger.info("Placing final order with Dominos");
                 const placedOrder = await this.placeOrderWithAPI(orderRequest);
                 if (placedOrder.Status !== 'Success') {
+                    elizaLogger.error("Order placement failed:", placedOrder.StatusItems);
                     return {
                         type: ErrorType.PAYMENT_FAILED,
                         message: placedOrder.StatusItems.join(', '),
@@ -728,6 +776,7 @@ export class PizzaOrderManager implements OrderManager {
                     };
                 }
 
+                elizaLogger.success("🍕 Order placed successfully! 🎉");
                 order.status = OrderStatus.CONFIRMED;
                 order.paymentStatus = PaymentStatus.PROCESSED;
                 order.progress.isConfirmed = true;
@@ -736,7 +785,7 @@ export class PizzaOrderManager implements OrderManager {
             return order;
 
         } catch (error) {
-            console.error('Error processing order:', error);
+            elizaLogger.error('Error processing order:', error);
             return {
                 type: ErrorType.SYSTEM_ERROR,
                 message: 'An unexpected error occurred while processing your order',

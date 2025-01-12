@@ -1,6 +1,7 @@
 import { Action, IAgentRuntime, Memory } from "@elizaos/core";
 import { PizzaOrderManager } from "../PizzaOrderManager";
 import { OrderStatus, Order } from "../types";
+import { elizaLogger } from "@elizaos/core";
 
 export const confirmOrder: Action = {
     name: "CONFIRM_ORDER",
@@ -26,25 +27,27 @@ export const confirmOrder: Action = {
         );
     },
     handler: async (runtime: IAgentRuntime, message: Memory) => {
+        elizaLogger.info("Confirming pizza order");
         const orderManager = new PizzaOrderManager(runtime);
         const userId = message.userId;
         const order = await orderManager.getOrder(userId);
         const customer = await orderManager.getCustomer(userId);
 
         try {
-            // Final validation with Dominos
+            elizaLogger.debug("Validating final order with Dominos");
             await order.validate();
 
-            // Get final pricing
+            elizaLogger.debug("Getting final pricing");
             await order.price();
 
-            // Place the order
+            elizaLogger.info("Placing final order with Dominos");
             await order.place();
 
             // Update order status
             order.status = OrderStatus.CONFIRMED;
             await orderManager.saveOrder(userId, order);
 
+            elizaLogger.success(`🎉 Order confirmed! Order #${order.orderID}`);
             return (
                 `Great news! Your order has been confirmed and is being prepared.\n\n` +
                 `Order Number: ${order.orderID}\n` +
@@ -52,6 +55,7 @@ export const confirmOrder: Action = {
                 orderManager.getOrderSummary(order, customer)
             );
         } catch (error) {
+            elizaLogger.error("Failed to confirm order:", error);
             return "There was an issue placing your order: " + error.message;
         }
     },

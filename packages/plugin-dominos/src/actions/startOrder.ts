@@ -1,5 +1,6 @@
 import { Action, ActionExample, IAgentRuntime, Memory, ModelClass, generateText } from "@elizaos/core";
 import { PizzaOrderManager } from "../PizzaOrderManager";
+import { elizaLogger } from "@elizaos/core";
 
 const COLLECT_INFO_PROMPT = `
 You are collecting information for a pizza order. Based on the conversation, determine what information is still needed.
@@ -48,12 +49,15 @@ export const startOrder: Action = {
         return !existingOrder; // Only valid if no existing order
     },
     handler: async (runtime: IAgentRuntime, message: Memory) => {
+        elizaLogger.info("Starting new pizza order");
+
         // Get any existing customer info
         const customerInfo = await runtime.messageManager.getMemories({
             roomId: message.roomId,
             count: 1
         });
 
+        elizaLogger.debug("Found existing customer info:", customerInfo.length > 0);
         const currentInfo = customerInfo.length > 0 ? customerInfo[0].content : {};
 
         // Generate response based on current info and message
@@ -61,17 +65,19 @@ export const startOrder: Action = {
             .replace('{{currentInfo}}', JSON.stringify(currentInfo))
             .replace('{{message}}', message.content.text);
 
-        const response = await generateText({
-            runtime,
-            context,
-            modelClass: ModelClass.LARGE,
-        });
-
         try {
+            const response = await generateText({
+                runtime,
+                context,
+                modelClass: ModelClass.LARGE,
+            });
+
             const parsed = JSON.parse(response);
+            elizaLogger.debug("Parsed customer information:", parsed);
 
             // Update customer info with any new information
             if (Object.keys(parsed.provided).some(key => parsed.provided[key])) {
+                elizaLogger.info("Updating customer information");
                 await runtime.messageManager.createMemory({
                     userId: message.userId,
                     roomId: message.roomId,
@@ -88,14 +94,14 @@ export const startOrder: Action = {
                 .every(key => parsed.provided[key] || (currentInfo && currentInfo[key]));
 
             if (hasAllInfo) {
-                // Start collecting order details
+                elizaLogger.success("All required customer information collected");
                 return "Great! Now let's build your pizza. What size would you like? We have Small, Medium, Large, and Extra Large.";
             }
 
-            // Ask for next piece of information
+            elizaLogger.info("Requesting additional customer information");
             return parsed.nextPrompt;
         } catch (error) {
-            console.error("Error parsing response:", error);
+            elizaLogger.error("Error processing customer information:", error);
             return "I'm sorry, I had trouble processing that. Could you please provide your delivery address?";
         }
     }
