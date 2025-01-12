@@ -45,6 +45,22 @@ export const confirmOrder: Action = {
 
             // Update order status
             order.status = OrderStatus.CONFIRMED;
+
+            // Store order details in memory for tracking
+            await runtime.messageManager.createMemory({
+                userId: message.userId,
+                roomId: message.roomId,
+                agentId: runtime.agentId,
+                content: {
+                    text: `Order #${order.orderID} confirmed`,
+                    type: 'order',
+                    orderID: order.orderID,
+                    status: order.status,
+                    estimatedWaitMinutes: order.estimatedWaitMinutes,
+                    total: order.total
+                }
+            });
+
             await orderManager.saveOrder(userId, order);
 
             elizaLogger.success(`🎉 Order confirmed! Order #${order.orderID}`);

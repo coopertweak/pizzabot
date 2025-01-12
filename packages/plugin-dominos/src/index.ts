@@ -6,6 +6,7 @@ import { updateCustomer } from "./actions/updateCustomer";
 import { updateOrder } from "./actions/updateOrder";
 import { confirmOrder } from "./actions/confirmOrder";
 import { detectPizzaIntent } from "./actions/detectPizzaIntent";
+import { trackOrder } from "./actions/trackOrder";
 
 // Export plugin as default
 export default {
@@ -17,7 +18,8 @@ export default {
         endOrder,
         updateCustomer,
         updateOrder,
-        confirmOrder
+        confirmOrder,
+        trackOrder
     ],
     providers: [pizzaOrderProvider],
 } as Plugin;
