@@ -2,6 +2,15 @@
 
 This repository is a fork of the [Eliza AI Agent Framework](https://github.com/elizaos/eliza) that adds pizza ordering capabilities through Dominos Pizza integration.
 
+## ⚠️ Security Warning
+
+**IMPORTANT:** When handling personal information (addresses, payment details, etc.):
+- DO NOT collect sensitive data in public channels ie twitter(X), discord, etc.
+- Use private channels like:
+  - Local private instance
+  - Chats running on a personal server or a trusted execution environment (TEE)
+- Consider implementing additional encryption for stored data
+
 ## 🚀 Features
 
 All the powerful features of Eliza, plus:
