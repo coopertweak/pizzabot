@@ -1,6 +1,7 @@
-import { Action, ActionExample, IAgentRuntime, Memory, elizaLogger } from "@elizaos/core";
+import { Action, IAgentRuntime, Memory, elizaLogger } from "@elizaos/core";
 import { PizzaOrderManager } from "../PizzaOrderManager";
 import { Tracking } from 'dominos';
+import { OrderStatus } from "../types";
 
 export const trackOrder: Action = {
     name: "TRACK_ORDER",
@@ -39,60 +40,27 @@ export const trackOrder: Action = {
         ],
     ],
     validate: async (runtime: IAgentRuntime, message: Memory) => {
-        // Check if user has a recent order in memory
-        const recentOrder = await runtime.messageManager.getMemories({
-            roomId: message.roomId,
-            count: 1
-        }).then(memories =>
-            memories.filter(m =>
-                m.userId === message.userId &&
-                m.content.type === 'order'
-            )
-        );
-
-        return recentOrder.length > 0;
+        const orderManager = new PizzaOrderManager(runtime);
+        const order = await orderManager.getOrder(message.userId);
+        return !!order && order.status === OrderStatus.CONFIRMED;
     },
     handler: async (runtime: IAgentRuntime, message: Memory) => {
         try {
             elizaLogger.info("Tracking pizza order for user");
+            const orderManager = new PizzaOrderManager(runtime);
 
-            // Get the user's most recent order from memory
-            const recentOrder = await runtime.messageManager.getMemories({
-                roomId: message.roomId,
-                count: 1
-            }).then(memories =>
-                memories.filter(m =>
-                    m.userId === message.userId &&
-                    m.content.type === 'order'
-                )
-            );
+            const order = await orderManager.getOrder(message.userId);
+            const customer = await orderManager.getCustomer(message.userId);
 
-            if (!recentOrder.length) {
-                elizaLogger.warn("No recent order found for user");
+            if (!order || !customer) {
+                elizaLogger.warn("No active order found for user");
                 return "I couldn't find any recent orders for you. Have you placed an order yet?";
             }
 
-            const orderData = recentOrder[0].content;
-            const customer = await runtime.messageManager.getMemories({
-                roomId: message.roomId,
-                count: 1
-            }).then(memories =>
-                memories.filter(m =>
-                    m.userId === message.userId &&
-                    m.content.type === 'customer'
-                )
-            );
-
-            if (!customer.length) {
-                elizaLogger.error("Customer data not found for order tracking");
-                return "I'm having trouble finding your customer information. Please try placing a new order.";
-            }
-
             const tracking = new Tracking();
-            elizaLogger.debug("Requesting tracking info for phone:", customer[0].content.phone);
+            elizaLogger.debug("Requesting tracking info for phone:", customer.phone);
 
-            const trackingResult = await tracking.byPhone(customer[0].content.phone);
-
+            const trackingResult = await tracking.byPhone(customer.phone);
             elizaLogger.success("Retrieved order tracking information");
 
             // Format tracking information into a user-friendly message
@@ -122,7 +90,6 @@ export const trackOrder: Action = {
         } catch (error) {
             elizaLogger.error("Error tracking order:", error);
 
-            // Handle specific Dominos tracking errors
             if (error.name === 'DominosTrackingError') {
                 return "I couldn't find any active orders for tracking. If you just placed your order, please wait a few minutes and try again.";
             }

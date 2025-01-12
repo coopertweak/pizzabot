@@ -270,28 +270,19 @@ export class PizzaOrderManager implements OrderManager {
 
     // Cache Methods
     async getOrder(userId: string): Promise<Order | null> {
-        const cachedOrder = await this.runtime.cacheManager.get<Order>(
-            `pizza-order-${userId}`
-        );
-        return cachedOrder || null;
+        return this.runtime.cacheManager.get(`order:${userId}`);
     }
 
     async saveOrder(userId: string, order: Order): Promise<void> {
-        await this.runtime.cacheManager.set(`pizza-order-${userId}`, order);
+        await this.runtime.cacheManager.set(`order:${userId}`, order);
     }
 
     async getCustomer(userId: string): Promise<Customer | null> {
-        const customer = await this.runtime.cacheManager.get<Customer>(
-            `pizza-customer-${userId}`
-        );
-        return customer || null;
+        return this.runtime.cacheManager.get(`customer:${userId}`);
     }
 
     async saveCustomer(userId: string, customer: Customer): Promise<void> {
-        await this.runtime.cacheManager.set(
-            `pizza-customer-${userId}`,
-            customer
-        );
+        await this.runtime.cacheManager.set(`customer:${userId}`, customer);
     }
 
     // API Integration Methods
@@ -794,92 +785,90 @@ export class PizzaOrderManager implements OrderManager {
         }
     }
 
-    getOrderSummary(order: Order, customer: Customer): string {
-        let summary = "Order Summary:\n";
+    getOrderSummary(order?: Order, customer?: Customer): string {
+        let summary = "";
 
-        // Add customer info if available
-        if (customer.name) {
-            summary += `Customer: ${customer.name}\n`;
-        }
-        if (customer.address) {
-            summary += `Delivery Address: ${customer.address}\n`;
+        // Only add customer info if we have it
+        if (customer?.name) {
+            summary += `Order for: ${customer.name}\n`;
         }
 
-        // Add items
-        if (order.items && order.items.length > 0) {
-            summary += "\nPizza(s):\n";
+        if (customer?.address) {
+            summary += `Delivery to: ${customer.address}\n`;
+        }
+
+        // Add order details if we have them
+        if (order?.items?.length) {
+            summary += "\nItems:\n";
             order.items.forEach((item, index) => {
-                summary += `${index + 1}. ${item.size} ${item.crust} Crust Pizza\n`;
-                if (item.toppings && item.toppings.length > 0) {
-                    summary += "   Toppings:\n";
+                summary += `${index + 1}. ${item.size} ${item.crust} Pizza\n`;
+                if (item.toppings?.length) {
                     item.toppings.forEach(topping => {
-                        const portion = topping.portion === 'ALL' ? 'Whole Pizza' : `${topping.portion} Half`;
-                        const amount = topping.amount > 1 ? 'Extra ' : '';
-                        summary += `   - ${amount}${this.menuConfig.availableToppings[topping.code]} (${portion})\n`;
+                        summary += `   - ${topping.code}\n`;
                     });
                 }
-                if (item.specialInstructions) {
-                    summary += `   Special Instructions: ${item.specialInstructions}\n`;
-                }
-                summary += `   Quantity: ${item.quantity}\n`;
             });
         }
 
-        // Add price if available
-        if (order.total) {
-            summary += `\nTotal: ${this.formatCurrency(order.total)}\n`;
+        if (order?.total) {
+            summary += `\nTotal: $${order.total.toFixed(2)}`;
         }
 
-        return summary;
+        return summary || "No order details available";
     }
 
-    getNextRequiredActionDialogue(order: Order, customer: Customer): string {
+    getNextRequiredActionDialogue(order?: Order, customer?: Customer): string {
+        // If no order exists yet, prompt to start one
+        if (!order) {
+            return "Would you like to order a pizza? I can help you with that!";
+        }
+
         // Check customer information
-        if (!customer.name || !customer.phone || !customer.email || !customer.address) {
+        if (!customer?.name || !customer?.phone || !customer?.email || !customer?.address) {
             return "To continue with your order, I'll need your delivery information. " +
                    "Please provide your name, phone number, email, and delivery address.";
         }
 
-        // Check if order has items
-        if (!order.items || order.items.length === 0) {
+        // Rest of the checks...
+        if (!order.items?.length) {
             return "What kind of pizza would you like to order? " +
                    "You can choose the size (Small, Medium, Large, XLarge) and crust type " +
                    "(Hand Tossed, Thin, Pan, Brooklyn, or Gluten Free).";
         }
 
-        // Check payment information
         if (!order.paymentMethod || !order.progress.hasValidPayment) {
             return "To complete your order, I'll need your payment information. " +
                    "Please provide your credit card details (number, expiration date, CVV, and postal code).";
         }
 
-        // Ready for confirmation
         if (!order.progress.isConfirmed) {
             return "Your order is ready! Would you like to confirm and place this order?";
         }
 
-        // Order is confirmed
         return "Your order has been confirmed and is being prepared. " +
                "You can track your order status using your phone number.";
     }
 
-    getNextRequiredAction(order: Order, customer: Customer): string {
+    getNextRequiredAction(order?: Order, customer?: Customer): string {
+        // If no order exists, suggest starting one
+        if (!order) {
+            return "START_ORDER";
+        }
+
         // Check customer information
-        if (!customer.name || !customer.phone || !customer.email || !customer.address) {
+        if (!customer?.name || !customer?.phone || !customer?.email || !customer?.address) {
             return "PROVIDE_CUSTOMER_INFO";
         }
 
-        // Check if order has items
-        if (!order.items || order.items.length === 0) {
+        // Rest of the checks...
+        if (!order.items?.length) {
             return "ADD_ITEMS";
         }
 
-        // Check payment information
         if (!order.paymentMethod || !order.progress.hasValidPayment) {
             return "PROVIDE_PAYMENT";
         }
 
-        // Ready for confirmation
         if (!order.progress.isConfirmed) {
             return "CONFIRM_ORDER";
         }
@@ -930,5 +919,32 @@ export class PizzaOrderManager implements OrderManager {
                 message: "Unable to check store availability. Please try again later."
             };
         }
+    }
+
+    async initializeOrder(userId: string): Promise<void> {
+        const newOrder: Order = {
+            status: OrderStatus.NEW,
+            items: [],
+            orderID: "",
+            total: 0,
+            estimatedWaitMinutes: 0,
+            paymentStatus: PaymentStatus.INVALID,
+            paymentMethod: null,
+            amountsBreakdown: { customer: 0 },
+            payments: [],
+            validate: async () => {},
+            price: async () => {},
+            place: async () => {},
+            addItem: async (item: OrderItem) => {
+                newOrder.items.push(item);
+            },
+            progress: {
+                hasCustomerInfo: false,
+                hasValidPayment: false,
+                isConfirmed: false
+            }
+        };
+
+        await this.saveOrder(userId, newOrder);
     }
 }

@@ -1,15 +1,14 @@
-import { Action, IAgentRuntime, Memory } from "@elizaos/core";
+import { Action, IAgentRuntime, Memory, elizaLogger } from "@elizaos/core";
 import { PizzaOrderManager } from "../PizzaOrderManager";
-import { OrderStatus, Order } from "../types";
-import { elizaLogger } from "@elizaos/core";
+import { OrderStatus } from "../types";
 
 export const confirmOrder: Action = {
     name: "CONFIRM_ORDER",
+    description: "Confirms and places the final order with Dominos",
     similes: ["FINALIZE_ORDER", "FINISH_ORDER", "PLACE_ORDER"],
     examples: [
-        // TODO
+        // TODO: Add examples
     ],
-    description: "Confirms and places the final order with Dominos",
     validate: async (runtime: IAgentRuntime, message: Memory) => {
         const orderManager = new PizzaOrderManager(runtime);
         const userId = message.userId;
@@ -43,27 +42,13 @@ export const confirmOrder: Action = {
             elizaLogger.info("Placing final order with Dominos");
             await order.place();
 
-            // Update order status
+            // Update order status and save
             order.status = OrderStatus.CONFIRMED;
-
-            // Store order details in memory for tracking
-            await runtime.messageManager.createMemory({
-                userId: message.userId,
-                roomId: message.roomId,
-                agentId: runtime.agentId,
-                content: {
-                    text: `Order #${order.orderID} confirmed`,
-                    type: 'order',
-                    orderID: order.orderID,
-                    status: order.status,
-                    estimatedWaitMinutes: order.estimatedWaitMinutes,
-                    total: order.total
-                }
-            });
-
             await orderManager.saveOrder(userId, order);
 
             elizaLogger.success(`🎉 Order confirmed! Order #${order.orderID}`);
+
+            // Return confirmation message - Eliza will handle storing it
             return (
                 `Great news! Your order has been confirmed and is being prepared.\n\n` +
                 `Order Number: ${order.orderID}\n` +
@@ -74,5 +59,5 @@ export const confirmOrder: Action = {
             elizaLogger.error("Failed to confirm order:", error);
             return "There was an issue placing your order: " + error.message;
         }
-    },
+    }
 };
